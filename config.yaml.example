@@ -40,6 +40,11 @@ curl_config:
       file_path: "user3_curl.txt"
       # 不设置 overrides 或 cookie_refresh_ql 时则使用全局配置
 
+# 跨运行保存登录状态（可选，仅通过环境变量启用，不在 YAML 中填写密钥）
+# 同时设置 WEREAD_SESSION_STATE_FILE（密文文件路径）和 WEREAD_SESSION_STATE_KEY（Fernet 密钥）。
+# GitHub Actions 配置同名 KEY Secret 后，自动保存 .github/weread-session.enc。
+# 未设置这两个环境变量时，仅在当前进程内刷新 Cookie。
+
 # 阅读配置（全局默认配置，可被用户特定配置覆盖）
 reading:
   # 阅读模式：smart_random(智能随机), sequential(顺序), pure_random(纯随机)

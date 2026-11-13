@@ -5,15 +5,6 @@ on:
   schedule:
     - cron: '0 19 * * *'
   
-  # 拉取请求触发，用于测试阅读
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'weread-bot.py'
-      - 'requirements.txt'
-      - '.github/workflows/auto-reading.yml'
-      - '.github/workflows/ci.yml'
-
   # 手动触发
   workflow_dispatch:
     inputs:
@@ -52,10 +43,21 @@ on:
         default: '50'
         type: string
 
+permissions:
+  contents: read
+
+concurrency:
+  group: weread-auto-reading-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   auto-reading:
+    # 只有默认分支可使用和保存登录状态；PR 的代码检查由 CI 工作流负责。
+    if: github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-24.04
     timeout-minutes: 120  # 2小时超时
+    permissions:
+      contents: write
     
     steps:
     - name: Checkout code
@@ -156,6 +158,9 @@ jobs:
         HACK_COOKIE_REFRESH_QL: ${{ secrets.HACK_COOKIE_REFRESH_QL }}
         # 多用户 cURL：在 WEREAD_CURL_STRING 中放置多段 curl，段与段之间至少插入两个空行
         WEREAD_CURL_STRING: ${{ secrets.WEREAD_CURL_STRING }}
+        # 仅保存密文；原始 cURL 和加密密钥始终留在 Secrets 中。
+        WEREAD_SESSION_STATE_KEY: ${{ secrets.WEREAD_SESSION_STATE_KEY }}
+        WEREAD_SESSION_STATE_FILE: ${{ secrets.WEREAD_SESSION_STATE_KEY != '' && '.github/weread-session.enc' || '' }}
         # 多用户并发控制，未设置默认 1（顺序执行）
         MAX_CONCURRENT_USERS: ${{ secrets.MAX_CONCURRENT_USERS || 1 }}
         # 单用户连续阅读失败上限，未设置时默认 5
@@ -212,6 +217,27 @@ jobs:
         
         # 运行阅读机器人
         python weread-bot.py --config config.yaml
+
+    - name: Persist encrypted login state
+      if: ${{ !cancelled() }}
+      run: |
+        set -euo pipefail
+        state_file='.github/weread-session.enc'
+        if [ ! -f "$state_file" ]; then
+          echo '没有生成加密登录状态；请检查刷新步骤及 WEREAD_SESSION_STATE_KEY 配置。'
+          exit 0
+        fi
+        git add -- "$state_file"
+        if git diff --cached --quiet -- "$state_file"; then
+          echo '加密登录状态没有变化。'
+          exit 0
+        fi
+        git config user.name 'github-actions[bot]'
+        git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+        git commit -m 'chore: persist encrypted WeRead session' -- "$state_file"
+        git pull --rebase origin "$GITHUB_REF_NAME"
+        git push origin "HEAD:$GITHUB_REF_NAME"
+        echo '已保存加密登录状态，下次运行将自动继续使用；仓库活动时间也已更新。'
 
     - name: Upload runtime artifacts
       if: always()

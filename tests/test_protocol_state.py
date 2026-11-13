@@ -46,6 +46,7 @@ class ProtocolStateTests(unittest.IsolatedAsyncioTestCase):
         session.http_client = FakeHttpClient(raw_responses=responses)
         session.headers = {}
         session.cookies = {"wr_skey": "old-key"}
+        session._cookie_state_store = None
         return session
 
     def test_only_truthy_succ_and_synckey_is_success(self):

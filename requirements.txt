@@ -4,3 +4,4 @@ PyYAML>=6.0
 urllib3>=1.26.0
 croniter>=2.0.0
 apprise>=1.9.0
+cryptography>=46.0.0

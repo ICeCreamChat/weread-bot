@@ -4,6 +4,7 @@ import logging
 import unittest
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 from tests.helpers import load_weread_bot
 
@@ -29,7 +30,10 @@ class JsonLoggingTests(unittest.TestCase):
 
     def test_setup_logging_uses_json_formatter_for_every_line(self):
         bot = load_weread_bot()
-        with tempfile.TemporaryDirectory() as temp_dir:
+        root_logger = logging.getLogger()
+        with tempfile.TemporaryDirectory() as temp_dir, \
+                patch.object(root_logger, "handlers", []), \
+                patch.object(root_logger, "level", root_logger.level):
             log_path = Path(temp_dir) / "test.log"
             bot.setup_logging(
                 bot.LoggingConfig(
@@ -39,11 +43,15 @@ class JsonLoggingTests(unittest.TestCase):
                     console=False,
                 )
             )
-            logging.info('中文 "quoted"\nline')
-            for handler in logging.getLogger().handlers:
-                handler.flush()
-
-            lines = log_path.read_text(encoding="utf-8").splitlines()
+            try:
+                logging.info('中文 "quoted"\nline')
+                for handler in root_logger.handlers:
+                    handler.flush()
+                lines = log_path.read_text(encoding="utf-8").splitlines()
+            finally:
+                for handler in root_logger.handlers[:]:
+                    root_logger.removeHandler(handler)
+                    handler.close()
 
         self.assertEqual(len(lines), 1)
         payload = json.loads(lines[0])

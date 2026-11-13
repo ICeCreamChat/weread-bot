@@ -147,6 +147,7 @@ python weread-bot.py --config multiuser-config.yaml
 
 > **详细配置指南**: [GitHub Actions 自动阅读配置指南](https://github.com/funnyzak/weread-bot/blob/main/docs/github-action-autoread-guide.md)
 > 工作流默认会把 `logs/weread.log` 和 `logs/run-history.json` 作为 artifact 上传，便于回看最近执行记录。
+> 配置 `WEREAD_SESSION_STATE_KEY` Secret 后，每次刷新得到的登录状态会加密保存到 `.github/weread-session.enc`，下次运行自动读取。每日保存也会更新仓库活动，减少定时工作流因不活跃被停用的风险。原始 cURL 和密钥仍只保存在 Secrets 中；微信要求重新登录时仍需更新 `WEREAD_CURL_STRING`。
 
 ### 方式五：不同运行模式
 

@@ -62,6 +62,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from logging.handlers import RotatingFileHandler
 
+from cryptography.fernet import Fernet, InvalidToken
+
 try:
     import yaml
 except ImportError:
@@ -3361,6 +3363,72 @@ class WeReadApplication:
                 logging.error(f"❌ 多用户总结通知发送失败: {e}")
 
 
+class CookieStateStore:
+    """只以认证加密形式保存跨运行的 Cookie，密钥仅从环境变量读取。"""
+
+    def __init__(self, path: str, key: str) -> None:
+        self.path = Path(path)
+        try:
+            self.cipher = Fernet(key.encode("ascii"))
+        except (ValueError, UnicodeError):
+            raise ValueError("WEREAD_SESSION_STATE_KEY 必须是有效的 Fernet 密钥") from None
+
+    @classmethod
+    def from_environment(cls) -> Optional[CookieStateStore]:
+        path = os.environ.get("WEREAD_SESSION_STATE_FILE", "").strip()
+        key = os.environ.get("WEREAD_SESSION_STATE_KEY", "").strip()
+        if not path and not key:
+            return None
+        if not path or not key:
+            raise ValueError(
+                "必须同时设置 WEREAD_SESSION_STATE_FILE 和 WEREAD_SESSION_STATE_KEY"
+            )
+        return cls(path, key)
+
+    def _read(self) -> Dict[str, Dict[str, str]]:
+        try:
+            ciphertext = self.path.read_bytes()
+        except FileNotFoundError:
+            return {}
+        try:
+            states = json.loads(self.cipher.decrypt(ciphertext))
+        except (InvalidToken, ValueError, UnicodeError):
+            raise ValueError("加密登录状态无法验证，请检查密钥或重新初始化状态文件") from None
+        if not isinstance(states, dict) or not all(
+            isinstance(source, str) and isinstance(cookies, dict)
+            and all(isinstance(name, str) and isinstance(value, str)
+                    for name, value in cookies.items())
+            for source, cookies in states.items()
+        ):
+            raise ValueError("加密登录状态格式无效")
+        return states
+
+    def load(self, source: str) -> Dict[str, str]:
+        """按原始 cURL 标识恢复；手动更新 cURL 后不覆盖新登录信息。"""
+        return self._read().get(source, {}).copy()
+
+    def save(self, source: str, cookies: Dict[str, str]) -> None:
+        """合并各账号状态并原子替换，文件中不包含明文 Cookie。"""
+        states = self._read()
+        states[source] = cookies.copy()
+        ciphertext = self.cipher.encrypt(json.dumps(states).encode("utf-8"))
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "wb", dir=self.path.parent, prefix=f".{self.path.name}.",
+                suffix=".tmp", delete=False,
+            ) as temp_fp:
+                temp_path = Path(temp_fp.name)
+                temp_fp.write(ciphertext)
+                temp_fp.flush()
+                os.fsync(temp_fp.fileno())
+            os.replace(temp_path, self.path)
+        finally:
+            if temp_path and temp_path.exists():
+                temp_path.unlink()
+
+
 class WeReadSessionManager:
     """微信读书会话管理器"""
 
@@ -3405,7 +3473,8 @@ class WeReadSessionManager:
             config.reading, user_config
         )
 
-        self.http_client = HttpClient(config.network)
+        self._cookie_state_store = CookieStateStore.from_environment()
+        self._cookie_state_id = ""
         self.notification_service = NotificationService(config.notification)
         self.behavior_simulator = HumanBehaviorSimulator(
             config.human_simulation
@@ -3423,6 +3492,7 @@ class WeReadSessionManager:
 
         self._load_curl_config()
         self._initialize_session_user_agent()
+        self.http_client = HttpClient(config.network)
 
     def _resolve_cookie_refresh_ql(self) -> bool:
         """解析当前用户会话首选的 Cookie 刷新 ql 配置。"""
@@ -3508,6 +3578,15 @@ class WeReadSessionManager:
                 self.headers, self.cookies, curl_data = (
                     CurlParser.parse_curl_command(curl_content)
                 )
+
+                self._cookie_state_id = hashlib.sha256(
+                    curl_content.encode("utf-8")
+                ).hexdigest()
+                if self._cookie_state_store is not None:
+                    saved_cookies = self._cookie_state_store.load(self._cookie_state_id)
+                    if saved_cookies:
+                        self.cookies.update(saved_cookies)
+                        logging.info("✅ 已恢复上次自动更新的加密登录状态")
 
                 # 验证CURL配置的合法性
                 is_valid, validation_errors = CurlParser.validate_curl_headers(
@@ -4069,7 +4148,12 @@ class WeReadSessionManager:
                 )
                 continue
 
+            for cookie in response.cookies.jar:
+                self.cookies[cookie.name] = cookie.value
             self.cookies['wr_skey'] = new_skey
+            if self._cookie_state_store is not None:
+                self._cookie_state_store.save(self._cookie_state_id, self.cookies)
+                logging.info("✅ 刷新后的登录状态已加密保存，供下次运行使用")
             logging.info(
                 "✅ Cookie刷新成功，ql=%s，新密钥: %s",
                 ql_value,

@@ -57,11 +57,24 @@ curl 'https://weread.qq.com/web/book/read' -H 'cookie: wr_skey=user2; ...' --dat
 | `MAX_CONCURRENT_USERS` | 多用户并发数量（>=1） | 1 |
 | `MAX_CONSECUTIVE_FAILURES` | 单个用户连续阅读失败上限，达到后结束该会话 | 5 |
 | `HACK_COOKIE_REFRESH_QL` | Cookie 刷新首选 `ql` 值，失败时自动尝试其他兼容形式 | false |
+| `WEREAD_SESSION_STATE_KEY` | Fernet 加密密钥；配置后自动跨运行保存并恢复更新后的登录状态 | 未启用持久化 |
 | `NOTIFICATION_ONLY_ON_FAILURE` | 仅失败通知开关（true/false），覆盖 workflow 运行参数 | false |
 | `HISTORY_ENABLED` | 是否启用执行历史持久化 | true |
 | `HISTORY_FILE` | 执行历史输出路径 | logs/run-history.json |
 | `HISTORY_MAX_ENTRIES` | 最近执行记录保留条数 | 50 |
 | `HISTORY_PERSIST_RUNTIME_ERROR` | 运行时异常是否写入失败历史 | true |
+
+#### 登录状态自动更新
+
+在配置 `WEREAD_CURL_STRING` 的基础上，添加 `WEREAD_SESSION_STATE_KEY` Secret，值使用 `cryptography.fernet.Fernet.generate_key()` 生成的密钥。首次运行会创建 `.github/weread-session.enc`；之后每次运行先解密恢复上次的 Cookie，再向微信读书刷新，并保存刷新响应中的 Cookie（包括服务端返回的 `wr_skey`、`wr_rt`）。
+
+工作流只在默认分支运行，使用本次任务的 `GITHUB_TOKEN` 提交密文文件，无需额外长期 GitHub Token。该提交也会更新仓库活动时间，减少因长期不活跃停用定时任务的风险。工作流采用串行执行，避免两个任务互相覆盖登录状态。仓库分支规则如禁止 Actions 推送，保存步骤会明确失败，需要按仓库规则配置允许的保存方式。
+
+密钥和原始 cURL 不写入代码、日志或提交。请勿将密钥与密文一起公开。手动更新 `WEREAD_CURL_STRING` 后，程序会以新 cURL 为起点，不会被旧状态覆盖；如果更换加密密钥，需同时删除旧密文文件后重新运行。解密或保存失败会报告失败，不会悄悄丢弃状态。
+
+本地或 Docker 使用时，同时设置 `WEREAD_SESSION_STATE_FILE`（持久卷中的文件路径）和 `WEREAD_SESSION_STATE_KEY`。未设置这两个环境变量时，保持原有的进程内刷新行为。
+
+自动刷新依赖微信读书继续接受现有登录状态。强制退出、要求扫码验证或接口变更时，仍需重新登录并更新 `WEREAD_CURL_STRING`，无法保证永久免登录。
 
 #### 可选通知配置
 
