@@ -1,9 +1,9 @@
 name: Auto Reading Bot
 
 on:
-  # 每天北京时间 03:00 运行；GitHub Actions 使用 UTC（前一天 19:00）
+  # 每天北京时间 03:17 运行；UTC 为前一天 19:17，避开整点调度高峰。
   schedule:
-    - cron: '0 19 * * *'
+    - cron: '17 19 * * *'
   
   # 手动触发
   workflow_dispatch:
