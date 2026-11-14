@@ -1,9 +1,9 @@
 name: Auto Reading Bot
 
 on:
-  # 每天北京时间 03:17 运行；UTC 为前一天 19:17，避开整点调度高峰。
+  # 临时定时验证，完成后恢复每日北京时间 03:17。
   schedule:
-    - cron: '17 19 * * *'
+    - cron: '27 3 14 11 *'
   
   # 手动触发
   workflow_dispatch:
@@ -75,7 +75,7 @@ jobs:
 
     - name: Resolve runtime parameters
       env:
-        INPUT_TARGET_DURATION: ${{ github.event.inputs.target_duration }}
+        INPUT_TARGET_DURATION: ${{ github.event_name == 'schedule' && '1' || github.event.inputs.target_duration }}
         SECRET_TARGET_DURATION: ${{ secrets.TARGET_DURATION }}
       run: |
         target_duration="${INPUT_TARGET_DURATION}"
