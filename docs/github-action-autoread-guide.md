@@ -207,15 +207,16 @@ curl 'https://weread.qq.com/web/book/read' -H 'cookie: wr_skey=user2; ...' --dat
 
 #### 定时触发
 
-本仓库的 `.github/workflows/auto-reading.yml` 已启用每日定时阅读，计划时间为北京时间 **03:17**（UTC 前一天 19:17）。Fork 后仍需在 Actions 页面确认工作流已启用。修改时间时调整 `schedule` 中的 cron 表达式：
+本仓库参考 [原项目工作流](https://github.com/funnyzak/weread-bot/blob/main/.github/workflows/auto-reading.yml) 重新配置，使用 `ubuntu-latest`、`actions/checkout@v4`、`actions/setup-python@v5` 和 `actions/upload-artifact@v4`，并启用原版示例的两个定时点：每天北京时间 **08:00 和 20:00**。每次阅读时长仍由仓库 Secret `TARGET_DURATION` 控制；保留登录状态加密保存和同分支串行运行。Fork 后仍需在 Actions 页面确认工作流已启用。修改时间时调整 `schedule` 中的 cron 表达式：
 
 ```yaml
 on:
   schedule:
-    - cron: '17 19 * * *'  # UTC 19:17 = 次日北京时间 03:17
+    - cron: '0 0 * * *'   # UTC 00:00 = 北京时间 08:00
+    - cron: '0 12 * * *'  # UTC 12:00 = 北京时间 20:00
 ```
 
-GitHub 的定时触发可能延迟，负载高时也可能漏触发；使用非整点时间可降低调度拥堵的影响。工作流显示为启用、手动运行正常但长期没有定时运行记录时，可提交一次 cron 时间修改，重新登记定时任务。每天是否运行应以 Actions 中事件类型为 `schedule` 的记录为准，手动测试成功不能证明定时触发已经恢复。
+GitHub Actions 由上面的 `schedule` 启动，运行时使用 `startup_mode: immediate`。`config.yaml.example` 的 `schedule` 仅控制程序自身的定时模式，不控制 Actions。GitHub 定时触发可能延迟或漏触发；重新配置后应保持 cron 稳定，并以 Actions 中事件类型为 `schedule` 的实际记录确认恢复，手动测试成功不能证明定时触发已经恢复。
 
 GitHub 的“仅失败工作流邮件”只覆盖实际启动后失败的任务。未触发的定时任务没有失败运行记录，因此该设置不会为漏触发发送邮件。参考 [GitHub 工作流排错说明](https://docs.github.com/en/actions/how-tos/troubleshoot-workflows)。
 
@@ -323,7 +324,7 @@ A: 是的，GitHub 免费账户每月有 2000 分钟的 Actions 使用时间。�
 
 ### Q: 如何设置定时运行？
 
-A: 本仓库已配置每天北京时间 03:17 运行；修改 `.github/workflows/auto-reading.yml` 的 `schedule` 可调整时间，cron 使用 UTC。Fork 后请确认 Actions 工作流已启用。默认阅读时长由仓库 Secret `TARGET_DURATION` 控制，例如 `5-10`。计划时间不保证准时触发，请同时检查实际的定时运行记录。
+A: 本仓库按原项目示例配置每天北京时间 08:00 和 20:00 运行；修改 `.github/workflows/auto-reading.yml` 的 `schedule` 可调整时间，cron 使用 UTC。Fork 后请确认 Actions 工作流已启用。默认阅读时长由仓库 Secret `TARGET_DURATION` 控制，例如 `5-10`。计划时间不保证准时触发，请同时检查实际的定时运行记录。
 
 ### Q: GitHub Actions 里的执行历史保存在哪里？
 

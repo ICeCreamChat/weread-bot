@@ -1,9 +1,10 @@
 name: Auto Reading Bot
 
 on:
-  # 每天北京时间 03:17 运行；UTC 为前一天 19:17，避开整点调度高峰。
+  # 按原项目示例启用定时触发：每天北京时间 08:00 和 20:00。
   schedule:
-    - cron: '17 19 * * *'
+    - cron: '0 0 * * *'    # UTC 00:00 = 北京时间 08:00
+    - cron: '0 12 * * *'   # UTC 12:00 = 北京时间 20:00
   
   # 手动触发
   workflow_dispatch:
@@ -54,17 +55,17 @@ jobs:
   auto-reading:
     # 只有默认分支可使用和保存登录状态；PR 的代码检查由 CI 工作流负责。
     if: github.ref_name == github.event.repository.default_branch
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 120  # 2小时超时
     permissions:
       contents: write
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v7
+      uses: actions/checkout@v4
 
     - name: Set up Python 3.11
-      uses: actions/setup-python@v7
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
@@ -241,7 +242,7 @@ jobs:
 
     - name: Upload runtime artifacts
       if: always()
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v4
       with:
         name: weread-runtime-${{ github.run_id }}
         path: |

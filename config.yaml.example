@@ -244,6 +244,7 @@ hack:
   cookie_refresh_ql: false
 
 # 定时任务配置（仅在 startup_mode 为 scheduled 时生效）
+# GitHub Actions 的启动时间在 .github/workflows/auto-reading.yml 中设置，本节不控制云端触发。
 schedule:
   enabled: false   # 是否启用定时任务（true 时按 cron_expression 执行）
   # Cron 表达式，支持标准五段式及简化格式
