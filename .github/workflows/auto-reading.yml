@@ -1,11 +1,7 @@
 name: Auto Reading Bot
 
 on:
-  # 按原项目示例启用定时触发：每天北京时间 08:00 和 20:00。
-  schedule:
-    - cron: '0 0 * * *'    # UTC 00:00 = 北京时间 08:00
-    - cron: '0 12 * * *'   # UTC 12:00 = 北京时间 20:00
-  
+  # 由 cron-job.org 每天北京时间 03:45 调用 workflow_dispatch。
   # 手动触发
   workflow_dispatch:
     inputs:
